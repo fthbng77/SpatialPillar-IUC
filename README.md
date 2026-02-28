@@ -1,8 +1,8 @@
 <div align="center">
 
-# RadarPillars: Efficient Object Detection from 4D Radar Point Clouds
+# SpatialPillar-IUC: Spatially-Enhanced Radar 3D Object Detection
 
-**OpenPCDet-based implementation for View-of-Delft (VoD) & Astyx datasets**
+**Geometric features, velocity-aware attention, and deformable convolutions for 4D radar**
 
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![PyTorch 2.4+](https://img.shields.io/badge/PyTorch-2.4%2B-ee4c2c.svg)](https://pytorch.org/)
@@ -36,9 +36,14 @@
 
 ## Overview
 
-This repository implements the **RadarPillars** architecture ([Gillen et al., IROS 2024](https://arxiv.org/abs/2408.05020)) for **radar-only 3D object detection**. Built on top of [OpenPCDet](https://github.com/open-mmlab/OpenPCDet), it removes LiDAR/image dependencies and adds radar-specific physics features including Doppler velocity decomposition and RCS normalization.
+**SpatialPillar-IUC** extends [RadarPillars](https://arxiv.org/abs/2408.05020) (Gillen et al., IROS 2024) with a series of spatially-aware modules designed to address the unique challenges of radar-only 3D object detection. Built on [OpenPCDet](https://github.com/open-mmlab/OpenPCDet), the project name reflects the core architecture:
+
+- **Spatial** — geometric spatial features (GeoSPA), spatial-context attention (CQCA), and spatially-adaptive deformable convolutions (DCN)
+- **Pillar** — the pillar-based point cloud representation from PointPillars
+- **IUC** — the three key modules stacked in the 3D backbone: **I**ntra-pillar attention, **U**nified velocity clustering, and **C**luster-query cross-attention
 
 **Supported Datasets:**
+
 | Dataset | Classes | Radar Features | Frames |
 |---|---|---|---|
 | **View-of-Delft (VoD)** | Car, Pedestrian, Cyclist | x, y, z, RCS, v_r, v_r_comp, time | 5-frame accumulation |
@@ -48,51 +53,102 @@ This repository implements the **RadarPillars** architecture ([Gillen et al., IR
 
 ## Architecture
 
+SpatialPillar-IUC introduces five new modules on top of the RadarPillars baseline:
+
 <div align="center">
 
 ```
 Input: Radar Point Cloud (N, 7)
          │
          ▼
-┌─────────────────────┐
-│  PillarVFE          │  Voxelization + Velocity Decomposition
-│  vr → vx, vy        │  φ = atan2(y, x), vx = vr·cos(φ), vy = vr·sin(φ)
-└─────────┬───────────┘
+┌─────────────────────────┐
+│  GeoSPA Features         │  KNN covariance eigenvalue analysis
+│  → scatterness,          │  Lalonde geometric descriptors (k=16)
+│    linearness,           │  Appended as 3 extra point features
+│    surfaceness           │
+└─────────┬───────────────┘
           ▼
-┌─────────────────────┐
-│  PillarAttention     │  Global Self-Attention (C=32, H=1)
-│  + LayerNorm + FFN   │  with key padding mask for sparse radar
-└─────────┬───────────┘
+┌─────────────────────────┐
+│  PillarVFE               │  Voxelization + Doppler Decomposition
+│  vr_comp → vx, vy        │  φ = atan2(y, x), vx = vr·cos(φ), vy = vr·sin(φ)
+└─────────┬───────────────┘
           ▼
-┌─────────────────────┐
-│  PointPillarScatter  │  Sparse-to-Dense BEV projection
-└─────────┬───────────┘
+┌─────────────────────────┐
+│  PillarAttention (I)     │  Global Self-Attention (C=32, H=1)
+│  + LayerNorm + FFN       │  Key padding mask for sparse radar
+└─────────┬───────────────┘
           ▼
-┌─────────────────────┐
-│  BaseBEVBackbone     │  Multi-scale 2D CNN (3 layers, 32 channels)
-└─────────┬───────────┘
+┌─────────────────────────┐
+│  CQCAModule (U+C)        │  DBSCAN velocity clustering (eps=0.5)
+│  Cluster-Query            │  Cross-attention: pillars → velocity clusters
+│  Cross-Attention          │  (C=32, H=2, max 32 clusters)
+└─────────┬───────────────┘
           ▼
-┌─────────────────────┐
-│  AnchorHeadSingle    │  Anchor-based detection + Direction classifier
-└─────────┬───────────┘
+┌─────────────────────────┐
+│  PointPillarScatter      │  Sparse-to-Dense BEV projection
+└─────────┬───────────────┘
+          ▼
+┌─────────────────────────┐
+│  DCNBEVBackbone          │  Deformable Conv BEV backbone
+│  + KDEDensityBranch      │  + Gaussian KDE density map fusion
+└─────────┬───────────────┘
+          ▼
+┌─────────────────────────┐
+│  CenterHead              │  Anchor-free heatmap-based detection
+└─────────┬───────────────┘
           ▼
     3D Bounding Boxes
 ```
 
 </div>
 
-<p align="center">
-  <img src="docs/model_framework.png" width="80%" alt="OpenPCDet Framework">
-  <br><em>OpenPCDet modular framework architecture</em>
-</p>
+### Configuration Variants
+
+| Config | GeoSPA | PillarAttn | CQCA | DCN | KDE | Head | Distillation |
+|---|:---:|:---:|:---:|:---:|:---:|---|:---:|
+| `vod_radarpillar.yaml` | | x | | | | AnchorHead | |
+| `spatialpillar_centerhead.yaml` | | x | | | | CenterHead | |
+| `spatialpillar_dcn.yaml` | | x | | x | | AnchorHead | |
+| `spatialpillar_distill.yaml` | | x | | | | AnchorHead | x |
+| **`spatialpillar_full.yaml`** | **x** | **x** | **x** | **x** | **x** | **CenterHead** | optional |
 
 ---
 
 ## Key Contributions
 
-### 1. Doppler Velocity Decomposition
+### 1. GeoSPA: Geometric Spatial Features
 
-Radar measures only **radial velocity** (v_r). We decompose it into Cartesian components in the VFE layer for directional awareness:
+Inspired by MUFASA. Computes **Lalonde geometric descriptors** from each point's KNN neighborhood (k=16) via covariance eigenvalue analysis:
+
+```
+λ1 ≥ λ2 ≥ λ3  (eigenvalues of local covariance matrix)
+
+scatterness = λ3 / λ1    → high for isotropically distributed points
+linearness  = (λ1-λ2)/λ1 → high for edge-like / pole structures
+surfaceness = (λ2-λ3)/λ1 → high for planar structures
+```
+
+These 3 features are appended to each point, providing local geometry context that pure pillar pooling loses.
+
+### 2. PillarAttention: Intra-Pillar Self-Attention
+
+Global multi-head self-attention across all active pillars. Key design: **key padding masks** prevent empty pillar positions from corrupting attention scores — critical for the extreme sparsity of radar point clouds (~200 points vs LiDAR's ~100k).
+
+### 3. CQCA: Cluster-Query Cross-Attention
+
+Inspired by MAFF-Net. Groups pillars into velocity clusters via DBSCAN on radial velocity, then applies **cross-attention** from pillar features (Q) to velocity-cluster centroids (K, V). This explicitly leverages Doppler grouping to associate spatially-separated points that share motion patterns.
+
+### 4. DCNBEVBackbone: Deformable Convolutions
+
+Replaces the first convolution in each BEV encoder block with `DeformConv2d`. The learnable offsets allow spatially-adaptive receptive fields, better handling the irregular spatial distribution of radar data. Offset convolutions are zero-initialized so training starts as standard convolutions.
+
+### 5. KDE Density Branch
+
+Inspired by SMURF. A parallel branch that estimates point density via 2D Gaussian KDE on the BEV grid, processes it through a small CNN, and concatenates with BEV features. Provides explicit density awareness to the detection head.
+
+### 6. Doppler Velocity Decomposition
+
+Radar measures only **radial velocity** (v_r). We decompose it into Cartesian components in the VFE layer:
 
 ```
 φ = atan2(y, x + 1e-6)
@@ -100,17 +156,19 @@ vx = v_r_comp · cos(φ)
 vy = v_r_comp · sin(φ)
 ```
 
-### 2. Physics-Consistent Augmentation
+### 7. Physics-Consistent Augmentation Fix
 
-Fixed a critical bug in `augmentor_utils.py` where `random_flip` and `global_rotation` were incorrectly transforming time values instead of velocity vectors. Velocity is a physical vector and must be rotated/flipped alongside point coordinates.
+Fixed a critical bug in `augmentor_utils.py` where `random_flip` and `global_rotation` were incorrectly transforming time values instead of velocity vectors. The original code assumed columns 5–6 are `[vx, vy]` (nuScenes convention), but for VoD radar they are `[v_r_comp, time]`.
 
-### 3. PillarAttention for Sparse Radar
+### 8. LiDAR-to-Radar Knowledge Distillation
 
-Masked multi-head self-attention that handles the inherent sparsity of radar point clouds via key padding masks, preventing empty pillar regions from corrupting attention scores.
+Inspired by SCKD. Optional teacher-student framework where a pretrained LiDAR PointPillar guides the radar model via:
+- **Feature mimicry loss**: MSE between teacher/student BEV feature maps
+- **Response distillation loss**: Temperature-scaled KL divergence on classification logits
 
-### 4. Dual Cyclist Anchor Strategy
+### 9. CenterHead: Anchor-Free Detection
 
-VoD's Cyclist class contains diverse sub-types (bicycle, rider, motor, moped). A dual-anchor approach captures both small (bicycle) and large (motorcycle) vehicles separately.
+Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free detection, avoiding the need for hand-tuned anchor sizes.
 
 ---
 
@@ -282,17 +340,38 @@ python -m pcdet.datasets.astyx.astyx_dataset create_astyx_infos \
 
 ## Training & Evaluation
 
-### VoD Training
+### SpatialPillar-IUC Full Model (VoD)
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python tools/train.py \
+    --cfg_file tools/cfgs/vod_models/spatialpillar_full.yaml \
+    --batch_size 16
+
+# With WandB experiment tracking
+CUDA_VISIBLE_DEVICES=0 python tools/train.py \
+    --cfg_file tools/cfgs/vod_models/spatialpillar_full.yaml \
+    --batch_size 16 --use_wandb
+```
+
+### RadarPillar Baseline (VoD)
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python tools/train.py \
     --cfg_file tools/cfgs/vod_models/vod_radarpillar.yaml \
     --batch_size 16
+```
 
-# With WandB experiment tracking
-CUDA_VISIBLE_DEVICES=0 python tools/train.py \
-    --cfg_file tools/cfgs/vod_models/vod_radarpillar.yaml \
-    --batch_size 16 --use_wandb
+### Ablation Variants
+
+```bash
+# CenterHead only (no CQCA/DCN)
+python tools/train.py --cfg_file tools/cfgs/vod_models/spatialpillar_centerhead.yaml
+
+# DCN backbone
+python tools/train.py --cfg_file tools/cfgs/vod_models/spatialpillar_dcn.yaml
+
+# LiDAR distillation (requires teacher checkpoint)
+python tools/train.py --cfg_file tools/cfgs/vod_models/spatialpillar_distill.yaml
 ```
 
 ### Astyx Training
@@ -307,13 +386,13 @@ CUDA_VISIBLE_DEVICES=0 python tools/train.py \
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python tools/test.py \
-    --cfg_file tools/cfgs/vod_models/vod_radarpillar.yaml \
+    --cfg_file tools/cfgs/vod_models/spatialpillar_full.yaml \
     --ckpt <checkpoint_path>
 ```
 
 ### Key Hyperparameters
 
-| Parameter | VoD | Astyx |
+| Parameter | VoD (SpatialPillar) | Astyx |
 |---|---|---|
 | Voxel Size | 0.16 x 0.16 x 5.0 m | 0.2 x 0.2 x 4.0 m |
 | Max Points/Voxel | 16 | 32 |
@@ -322,6 +401,51 @@ CUDA_VISIBLE_DEVICES=0 python tools/test.py \
 | Optimizer | adam_onecycle | adam_onecycle |
 | Early Stopping | 30 epoch patience | -- |
 | NMS Threshold | 0.1 | 0.01 |
+| GeoSPA k-neighbors | 16 | -- |
+| CQCA velocity eps | 0.5 | -- |
+
+---
+
+## Project Structure
+
+```
+SpatialPillar-IUC/
+├── pcdet/
+│   ├── datasets/
+│   │   ├── vod/                           # VoD dataset class
+│   │   ├── astyx/                         # Astyx dataset class
+│   │   ├── augmentor/
+│   │   │   └── augmentor_utils.py         # Bug-fixed velocity-aware augmentation
+│   │   └── processor/
+│   │       ├── data_processor.py          # + compute_geospa_features step
+│   │       └── geospa_features.py         # [NEW] Lalonde geometric features
+│   ├── models/
+│   │   ├── backbones_3d/
+│   │   │   ├── pillar_attention.py        # [NEW] Intra-pillar self-attention
+│   │   │   ├── cqca_module.py             # [NEW] Velocity cluster cross-attention
+│   │   │   ├── velocity_clustering.py     # [NEW] DBSCAN velocity grouping
+│   │   │   └── vfe/pillar_vfe.py          # [EXT] Doppler decomposition + offsets
+│   │   ├── backbones_2d/
+│   │   │   ├── dcn_bev_backbone.py        # [NEW] Deformable Conv BEV backbone
+│   │   │   └── kde_density_branch.py      # [NEW] KDE density side-branch
+│   │   └── detectors/
+│   │       └── distillation_pointpillar.py  # [NEW] Teacher-student distillation
+│   └── utils/
+│       └── distillation_utils.py          # [NEW] Mimicry + response losses
+├── tools/
+│   ├── cfgs/vod_models/
+│   │   ├── vod_radarpillar.yaml           # Baseline config
+│   │   ├── spatialpillar_centerhead.yaml  # + CenterHead
+│   │   ├── spatialpillar_dcn.yaml         # + DCN backbone
+│   │   ├── spatialpillar_distill.yaml     # + LiDAR distillation
+│   │   └── spatialpillar_full.yaml        # Full SpatialPillar-IUC
+│   ├── train.py / test.py
+│   ├── visualize_bev.py                   # BEV prediction visualization
+│   ├── visualize_anchors.py               # Anchor-size analysis
+│   └── plot_cyclist_dist.py               # Cyclist distribution analysis
+└── docs/
+    └── visualizations/                    # Result plots and figures
+```
 
 ---
 
@@ -333,7 +457,7 @@ Visualize model predictions overlaid on radar point clouds. GT boxes are solid l
 
 ```bash
 python tools/visualize_bev.py \
-    --pred_dir output/cfgs/vod_models/vod_radarpillar/<exp>/eval/epoch_<N>/val/default/final_result/data \
+    --pred_dir output/cfgs/vod_models/spatialpillar_full/<exp>/eval/epoch_<N>/val/default/final_result/data \
     --samples 00315 00107 \
     --score_thresh 0.15 \
     --output_dir output_bev
@@ -372,7 +496,7 @@ python tools/plot_cyclist_dist.py    # Cyclist length histogram
 
 ```bash
 python visualize_radar_logs.py \
-    --logs output/cfgs/vod_models/vod_radarpillar/<exp>/eval/epoch_*/val/default/log_eval_*.txt \
+    --logs output/cfgs/vod_models/spatialpillar_full/<exp>/eval/epoch_*/val/default/log_eval_*.txt \
     --output output_plots
 ```
 
@@ -388,6 +512,13 @@ python tools/generate_velocity_norm_plots.py
 
 | Date | Description |
 |---|---|
+| 2026-02 | SpatialPillar-IUC: GeoSPA + PillarAttention + CQCA + DCN + KDE + CenterHead |
+| 2026-02 | CQCAModule: DBSCAN velocity clustering + cross-attention |
+| 2026-02 | DCNBEVBackbone: deformable convolutions for BEV feature extraction |
+| 2026-02 | KDEDensityBranch: Gaussian KDE density map fusion |
+| 2026-02 | LiDAR-to-Radar knowledge distillation framework |
+| 2026-02 | GeoSPA geometric features (scatterness, linearness, surfaceness) |
+| 2026-02 | CenterHead anchor-free detection integration |
 | 2026-02 | Velocity decomposition: vr_comp → vx, vy in VFE layer |
 | 2026-02 | Dual Cyclist anchor strategy for diverse sub-types |
 | 2026-02 | Augmentor bug fix: correct velocity index handling in flip/rotation |
@@ -422,7 +553,13 @@ python tools/generate_velocity_norm_plots.py
 
 ## Acknowledgement
 
-This project is built upon [OpenPCDet](https://github.com/open-mmlab/OpenPCDet), an open-source 3D object detection framework. We thank the OpenPCDet team for the original codebase and supported methods.
+This project is built upon [OpenPCDet](https://github.com/open-mmlab/OpenPCDet). The following works inspired key components:
+
+- **RadarPillars** (Gillen et al., IROS 2024) — base architecture
+- **MAFF-Net** (2025 RA-L) — velocity-aware cross-attention (CQCA)
+- **MUFASA** — geometric spatial features (GeoSPA)
+- **SMURF** (2023 TIV) — KDE density branch
+- **SCKD** (2025 AAAI) — knowledge distillation framework
 
 ---
 
