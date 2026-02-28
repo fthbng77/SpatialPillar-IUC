@@ -204,7 +204,7 @@ class CenterHead(nn.Module):
                     cy_val = cy.item() if isinstance(cy, torch.Tensor) else cy
                     center[b, obj_count] = torch.tensor([cx_val - cx_int, cy_val - cy_int])
                     center_z[b, obj_count] = z if isinstance(z, torch.Tensor) else torch.tensor([z])
-                    dim[b, obj_count] = cur_gt[k, 3:6]
+                    dim[b, obj_count] = cur_gt[k, 3:6].log()
                     rot[b, obj_count, 0] = torch.sin(heading) if isinstance(heading, torch.Tensor) else np.sin(heading)
                     rot[b, obj_count, 1] = torch.cos(heading) if isinstance(heading, torch.Tensor) else np.cos(heading)
                     ind[b, obj_count] = cy_int * feat_w + cx_int
@@ -348,9 +348,9 @@ class CenterHead(nn.Module):
                     y = cy * self.voxel_size[1] * self.feature_map_stride + self.point_cloud_range[1]
                     z = center_z[0][score_mask]
 
-                    dx = dim[0][score_mask]
-                    dy = dim[1][score_mask]
-                    dz = dim[2][score_mask]
+                    dx = dim[0][score_mask].exp()
+                    dy = dim[1][score_mask].exp()
+                    dz = dim[2][score_mask].exp()
 
                     sin_h = rot[0][score_mask]
                     cos_h = rot[1][score_mask]

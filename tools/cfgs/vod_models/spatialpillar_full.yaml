@@ -6,9 +6,11 @@ DATA_CONFIG:
 
     POINT_FEATURE_ENCODING: {
         encoding_type: absolute_coordinates_encoding,
-        used_feature_list: ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time', 'scatterness', 'linearness', 'surfaceness'],
-        src_feature_list: ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time', 'scatterness', 'linearness', 'surfaceness'],
+        used_feature_list: ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time'],
+        src_feature_list: ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time'],
     }
+
+    GEOSPA_ENABLED: True
 
     DATA_PROCESSOR:
         - NAME: mask_points_and_boxes_outside_range
