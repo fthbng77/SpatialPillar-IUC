@@ -1,0 +1,10 @@
+numpy
+torch>=1.1
+numba<=0.58.0
+tensorboardX<=2.6
+easydict
+pyyaml
+scikit-image
+tqdm
+pccm
+wandb
