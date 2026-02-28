@@ -55,52 +55,57 @@
 
 SpatialPillar-IUC introduces five new modules on top of the RadarPillars baseline:
 
-<div align="center">
+```mermaid
+graph TD
+    INPUT["<b>Radar Point Cloud</b><br/>(N, 7) — x, y, z, RCS, v_r, v_r_comp, time"]
 
-```
-Input: Radar Point Cloud (N, 7)
-         │
-         ▼
-┌─────────────────────────┐
-│  GeoSPA Features         │  KNN covariance eigenvalue analysis
-│  → scatterness,          │  Lalonde geometric descriptors (k=16)
-│    linearness,           │  Appended as 3 extra point features
-│    surfaceness           │
-└─────────┬───────────────┘
-          ▼
-┌─────────────────────────┐
-│  PillarVFE               │  Voxelization + Doppler Decomposition
-│  vr_comp → vx, vy        │  φ = atan2(y, x), vx = vr·cos(φ), vy = vr·sin(φ)
-└─────────┬───────────────┘
-          ▼
-┌─────────────────────────┐
-│  PillarAttention (I)     │  Global Self-Attention (C=32, H=1)
-│  + LayerNorm + FFN       │  Key padding mask for sparse radar
-└─────────┬───────────────┘
-          ▼
-┌─────────────────────────┐
-│  CQCAModule (U+C)        │  DBSCAN velocity clustering (eps=0.5)
-│  Cluster-Query            │  Cross-attention: pillars → velocity clusters
-│  Cross-Attention          │  (C=32, H=2, max 32 clusters)
-└─────────┬───────────────┘
-          ▼
-┌─────────────────────────┐
-│  PointPillarScatter      │  Sparse-to-Dense BEV projection
-└─────────┬───────────────┘
-          ▼
-┌─────────────────────────┐
-│  DCNBEVBackbone          │  Deformable Conv BEV backbone
-│  + KDEDensityBranch      │  + Gaussian KDE density map fusion
-└─────────┬───────────────┘
-          ▼
-┌─────────────────────────┐
-│  CenterHead              │  Anchor-free heatmap-based detection
-└─────────┬───────────────┘
-          ▼
-    3D Bounding Boxes
+    GEOSPA["<b>GeoSPA Features</b><br/>KNN covariance eigenanalysis (k=16)<br/>→ scatterness, linearness, surfaceness"]
+
+    VFE["<b>PillarVFE</b><br/>Voxelization + Doppler Decomposition<br/>v_r_comp → vx, vy via φ = atan2(y, x)"]
+
+    ATTN["<b>PillarAttention (I)</b><br/>Global Self-Attention (C=32, H=1)<br/>LayerNorm + FFN + Key Padding Mask"]
+
+    CQCA["<b>CQCAModule (U+C)</b><br/>DBSCAN velocity clustering (eps=0.5)<br/>Cross-Attention: pillars → velocity clusters<br/>(C=32, H=2, max 32 clusters)"]
+
+    SCATTER["<b>PointPillarScatter</b><br/>Sparse-to-Dense BEV Projection"]
+
+    DCN["<b>DCNBEVBackbone</b><br/>Deformable Conv BEV Backbone<br/>[3,5,5] layers, 32 channels"]
+
+    KDE["<b>KDEDensityBranch</b><br/>Gaussian KDE Density Map<br/>+16 density features"]
+
+    FUSION["<b>BEV Feature Fusion</b><br/>Concatenate: DCN (96ch) + KDE (16ch)"]
+
+    HEAD["<b>CenterHead</b><br/>Anchor-free Heatmap Detection<br/>Car / Pedestrian / Cyclist"]
+
+    OUTPUT["<b>3D Bounding Boxes</b>"]
+
+    INPUT --> GEOSPA
+    GEOSPA --> VFE
+    VFE --> ATTN
+    ATTN --> CQCA
+    CQCA --> SCATTER
+    SCATTER --> DCN
+    SCATTER --> KDE
+    DCN --> FUSION
+    KDE --> FUSION
+    FUSION --> HEAD
+    HEAD --> OUTPUT
+
+    style INPUT fill:#4a90d9,stroke:#2c5f8a,color:#fff
+    style GEOSPA fill:#7b68ee,stroke:#5a4cbf,color:#fff
+    style VFE fill:#e8833a,stroke:#c06a2e,color:#fff
+    style ATTN fill:#50c878,stroke:#3a9a5c,color:#fff
+    style CQCA fill:#50c878,stroke:#3a9a5c,color:#fff
+    style SCATTER fill:#95a5a6,stroke:#7f8c8d,color:#fff
+    style DCN fill:#e74c3c,stroke:#c0392b,color:#fff
+    style KDE fill:#e74c3c,stroke:#c0392b,color:#fff
+    style FUSION fill:#f39c12,stroke:#d68910,color:#fff
+    style HEAD fill:#9b59b6,stroke:#7d3c98,color:#fff
+    style OUTPUT fill:#2c3e50,stroke:#1a252f,color:#fff
 ```
 
-</div>
+**Renk kodlaması:**
+🟣 Preprocessing (GeoSPA) · 🟠 VFE · 🟢 3D Backbone (I-U-C) · 🔴 2D Backbone (DCN + KDE) · 🟡 Fusion · 🟣 Detection Head
 
 ### Configuration Variants
 
