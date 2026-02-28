@@ -34,7 +34,12 @@ class VodDataset(DatasetTemplate):
 
         self.radar_feature_order = ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time']
         self.selected_feature_list = list(self.dataset_cfg.POINT_FEATURE_ENCODING.used_feature_list)
-        self.selected_feature_idx = [self.radar_feature_order.index(x) for x in self.selected_feature_list]
+        # Only select features that exist in the raw radar data.
+        # Extra features (e.g., GeoSPA) are appended by data_processor later.
+        self.selected_feature_idx = [
+            self.radar_feature_order.index(x) for x in self.selected_feature_list
+            if x in self.radar_feature_order
+        ]
 
         norm_cfg = self.dataset_cfg.get('POINT_FEATURE_NORMALIZATION', None)
         self.use_feature_norm = bool(norm_cfg and norm_cfg.get('USE_NORM', False))

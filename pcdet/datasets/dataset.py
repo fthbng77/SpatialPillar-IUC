@@ -34,6 +34,15 @@ class DatasetTemplate(torch_data.Dataset):
             self.dataset_cfg.DATA_PROCESSOR, point_cloud_range=self.point_cloud_range, training=self.training
         )
 
+        # GeoSPA adds 3 extra features (scatterness, linearness, surfaceness)
+        # after point_feature_encoder but inside data_processor pipeline.
+        # We must account for this in num_point_features so VFE gets correct input dim.
+        self._geospa_extra_features = 0
+        for proc_cfg in self.dataset_cfg.DATA_PROCESSOR:
+            if proc_cfg.NAME == 'compute_geospa_features':
+                self._geospa_extra_features = 3
+                break
+
         self.grid_size = self.data_processor.grid_size
         self.voxel_size = self.data_processor.voxel_size
         self.total_epochs = 0

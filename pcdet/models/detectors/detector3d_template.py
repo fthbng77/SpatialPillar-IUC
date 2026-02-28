@@ -33,10 +33,11 @@ class Detector3DTemplate(nn.Module):
         self.global_step += 1
 
     def build_networks(self):
+        geospa_extra = getattr(self.dataset, '_geospa_extra_features', 0)
         model_info_dict = {
             'module_list': [],
-            'num_rawpoint_features': self.dataset.point_feature_encoder.num_point_features,
-            'num_point_features': self.dataset.point_feature_encoder.num_point_features,
+            'num_rawpoint_features': self.dataset.point_feature_encoder.num_point_features + geospa_extra,
+            'num_point_features': self.dataset.point_feature_encoder.num_point_features + geospa_extra,
             'grid_size': self.dataset.grid_size,
             'point_cloud_range': self.dataset.point_cloud_range,
             'voxel_size': self.dataset.voxel_size
