@@ -48,8 +48,10 @@ def parse_config():
     parser.add_argument('--start_epoch', type=int, default=0, help='')
     parser.add_argument('--save_to_file', action='store_true', default=False, help='')
     parser.add_argument('--use_wandb', action='store_true', default=False, help='whether to use wandb')
+    parser.add_argument('--no-amp', action='store_true', default=False, help='disable AMP (mixed precision) training')
 
     args = parser.parse_args()
+    args.amp = not args.no_amp
 
     cfg_from_yaml_file(args.cfg_file, cfg)
     cfg.TAG = Path(args.cfg_file).stem
@@ -81,7 +83,7 @@ def main():
     args.epochs = cfg.OPTIMIZATION.NUM_EPOCHS if args.epochs is None else args.epochs
 
     if args.fix_random_seed or cfg.OPTIMIZATION.get('FIX_RANDOM_SEED', True):
-        common_utils.set_random_seed(666)
+        common_utils.set_random_seed(666, allow_benchmark=args.amp)
 
     output_dir = cfg.ROOT_DIR / 'output' / cfg.EXP_GROUP_PATH / cfg.TAG / args.extra_tag
     ckpt_dir = output_dir / 'ckpt'
@@ -134,6 +136,8 @@ def main():
     model.cuda()
 
     optimizer = build_optimizer(model, cfg.OPTIMIZATION)
+
+    logger.info('AMP (mixed precision): %s' % ('ENABLED - bfloat16' if args.amp else 'disabled'))
 
     # load checkpoint if it is possible
     start_epoch = it = 0
@@ -231,7 +235,8 @@ def main():
         eval_output_dir=eval_output_dir,
         eval_interval=eval_interval,
         early_stop_cfg=early_stop_cfg,
-        dist_test=dist_train
+        dist_test=dist_train,
+        use_amp=args.amp
     )
 
     logger.info('**********************End training %s/%s(%s)**********************\n\n\n'
