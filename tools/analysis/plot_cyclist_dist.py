@@ -49,7 +49,7 @@ def plot_cyclist_dist(info_path, save_path):
 
 if __name__ == '__main__':
     info_path = Path('data/VoD/view_of_delft_PUBLIC/radar_5frames/vod_infos_train.pkl')
-    save_path = Path('tools/cyclist_dist.png')
+    save_path = Path('docs/visualizations/cyclist_dist.png')
     
     if not info_path.exists():
         print(f'Error: {info_path} not found.')

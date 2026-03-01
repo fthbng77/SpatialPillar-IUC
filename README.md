@@ -445,9 +445,13 @@ SpatialPillar-IUC/
 │   │   ├── spatialpillar_distill.yaml     # + LiDAR distillation
 │   │   └── spatialpillar_full.yaml        # Full SpatialPillar-IUC
 │   ├── train.py / test.py
-│   ├── visualize_bev.py                   # BEV prediction visualization
-│   ├── visualize_anchors.py               # Anchor-size analysis
-│   └── plot_cyclist_dist.py               # Cyclist distribution analysis
+│   └── analysis/
+│       ├── visualize_bev.py               # BEV prediction visualization
+│       ├── visualize_anchors.py           # Anchor-size analysis
+│       ├── visualize_architecture.py      # Architecture diagram generator
+│       ├── plot_cyclist_dist.py           # Cyclist distribution analysis
+│       ├── verify_anchors.py              # Anchor verification
+│       └── check_data_consistency.py      # Data consistency checks
 └── docs/
     └── visualizations/                    # Result plots and figures
 ```
@@ -461,7 +465,7 @@ SpatialPillar-IUC/
 Visualize model predictions overlaid on radar point clouds. GT boxes are solid lines, predictions are dashed. Points are colored by RCS value.
 
 ```bash
-python tools/visualize_bev.py \
+python tools/analysis/visualize_bev.py \
     --pred_dir output/cfgs/vod_models/spatialpillar_full/<exp>/eval/epoch_<N>/val/default/final_result/data \
     --samples 00315 00107 \
     --score_thresh 0.15 \
@@ -483,8 +487,8 @@ python tools/visualize_bev.py \
 Analyze dataset object size distributions and verify anchor box alignment.
 
 ```bash
-python tools/visualize_anchors.py    # Dimension scatter plot with anchors
-python tools/plot_cyclist_dist.py    # Cyclist length histogram
+python tools/analysis/visualize_anchors.py    # Dimension scatter plot with anchors
+python tools/analysis/plot_cyclist_dist.py    # Cyclist length histogram
 ```
 
 <p align="center">
@@ -527,7 +531,7 @@ python tools/generate_velocity_norm_plots.py
 | 2026-02 | Velocity decomposition: vr_comp → vx, vy in VFE layer |
 | 2026-02 | Dual Cyclist anchor strategy for diverse sub-types |
 | 2026-02 | Augmentor bug fix: correct velocity index handling in flip/rotation |
-| 2026-02 | BEV visualization tool (`tools/visualize_bev.py`) |
+| 2026-02 | BEV visualization tool (`tools/analysis/visualize_bev.py`) |
 | 2026-02 | WandB integration with `--use_wandb` flag |
 | 2026-02 | VoD radar pipeline: dataset config, info generation |
 | 2026-01 | Astyx radar pipeline: 7-feature point loader, velocity-aware augmentations |
