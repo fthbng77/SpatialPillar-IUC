@@ -220,60 +220,27 @@ Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free dete
 
 ### Ablation Studies
 
-#### Augmentor Bug Fix
+#### CenterHead vs Full Model (Module Contribution)
 
-| Experiment | Config | Car 3D | Ped 3D | Cyclist 3D |
-|---|---|:---:|:---:|:---:|
-| boxq_v7 (flip off, buggy) | Single anchor, NMS=0.05 | 38.58 | 0.60 | 0.00 |
-| **return_v5** (flip on, bug fixed) | Single anchor, NMS=0.01 | 35.35 | **31.99** | **17.65** |
+Isolates the effect of GeoSPA, CQCA, DCN, and KDE modules by comparing the CenterHead-only baseline against the full SpatialPillar-IUC model. Both trained 60 epochs on VoD with identical hyperparameters.
 
-> Pedestrian: 0.60 → 32.00 | Cyclist: 0.00 → 17.65
+| Config | GeoSPA | CQCA | DCN | KDE | Car 3D | Ped 3D | Cyc 3D | mAP |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `spatialpillar_centerhead` (e54) | | | | | **37.79** | **41.41** | **71.21** | **50.14** |
+| `spatialpillar_full` (e50) | x | x | x | x | 37.05 | 41.88 | 68.93 | 49.29 |
 
-#### Dual Cyclist Anchor
+**Per-class delta (Full - CenterHead):**
 
-| Experiment | Car 3D | Ped 3D | Cyclist 3D | Weighted Mean |
-|---|:---:|:---:|:---:|:---:|
-| return_v5_epoch80 (single anchor) | 34.31 | 34.32 | 18.08 | 26.20 |
-| **2peakcyclist** (dual anchor) | 33.60 | **35.99** | **20.30** | **27.67** |
+| Class | Delta | Analysis |
+|---|:---:|---|
+| Car | -0.74 | Slight regression |
+| Pedestrian | +0.47 | Marginal improvement |
+| Cyclist | -2.29 | Notable regression |
+| **mAP** | **-0.85** | **Full model underperforms baseline** |
 
-> Cyclist: 18.08 → 20.30 (+2.22 AP, +12.3%) | Recall@0.3: 0.40 → 0.47
+**Key finding:** Adding GeoSPA + CQCA + DCN + KDE simultaneously does **not** improve over the CenterHead baseline. The combined modules introduce complexity that degrades performance, particularly for Cyclist (-2.29 AP). This suggests potential interference between modules — individual module ablations (GeoSPA-only, KDE-only, CQCA-only configs) are needed to identify which modules contribute positively and which cause regression.
 
-#### Velocity Normalization Analysis
-
-The `v_r_comp` value is decomposed into vx, vy in the VFE layer. Normalization scales these via `(value - μ) / σ`. However, the config's mean/std values didn't match the actual data distribution:
-
-| Parameter | Config (old) | Actual Data | Ratio |
-|---|:---:|:---:|:---:|
-| vx std | 0.891 | **1.847** | 0.48x |
-| vy std | 0.453 | **0.944** | 0.48x |
-
-Since config std was half the actual std, normalization was **amplifying** the distribution instead of compressing it.
-
-<p align="center">
-  <img src="docs/visualizations/velocity_norm_comparison.png" width="90%" alt="Velocity Normalization Comparison">
-  <br><em>Config normalization increases outliers (5.8%) compared to raw (4.4%). Correct normalization reduces them to 2.3%</em>
-</p>
-
-<p align="center">
-  <img src="docs/visualizations/velocity_norm_2d_comparison.png" width="90%" alt="2D Velocity Distribution">
-  <br><em>Top: vy histogram. Bottom: vx-vy heatmap (log-scale), cyan dashed circle = 3σ boundary</em>
-</p>
-
-| | σ (std) | Outlier ratio (\|v\|>3) |
-|---|:---:|:---:|
-| Raw | 2.075 | 4.1% |
-| Config Norm (σ=0.89) | 2.328 | **4.7% (increased)** |
-| Correct Norm (σ=2.08) | 1.000 | **1.4% (decreased)** |
-
-#### Normalization ON vs OFF Training Results
-
-Even with incorrect std values, normalization ON outperforms OFF (vx/vy balance effect):
-
-| Class | Norm ON (e128) | Norm OFF (e128_tek_norm) | Diff |
-|---|:---:|:---:|:---:|
-| Car | 35.27 | 35.00 | +0.27 |
-| Ped | 34.27 | 33.17 | **+1.10** |
-| Cyc | 19.48 | 18.76 | **+0.72** |
+*More ablation experiments (individual module contributions) coming soon.*
 
 ---
 
