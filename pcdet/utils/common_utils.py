@@ -97,12 +97,16 @@ def create_logger(log_file=None, rank=0, log_level=logging.INFO):
     return logger
 
 
-def set_random_seed(seed):
+def set_random_seed(seed, allow_benchmark=False):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    if allow_benchmark:
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+    else:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def keep_arrays_by_name(gt_names, used_classes):
