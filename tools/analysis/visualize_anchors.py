@@ -52,7 +52,7 @@ def visualize_anchors(info_path, config_path, save_path):
 if __name__ == '__main__':
     info_path = Path('data/VoD/view_of_delft_PUBLIC/radar_5frames/vod_infos_train.pkl')
     config_path = Path('tools/cfgs/vod_models/vod_radarpillar.yaml')
-    save_path = Path('tools/anchor_verification.png')
+    save_path = Path('docs/visualizations/anchor_verification.png')
     
     if not info_path.exists():
         print(f'Error: {info_path} not found.')
