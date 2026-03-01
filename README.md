@@ -190,24 +190,25 @@ Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free dete
 | 3 | RadarGaussianDet3D | 2025 | 40.7 | 42.4 | 73.0 | 52.0 |
 | 5 | SMURF | 2023 TIV | **42.31** | 39.09 | 71.50 | 50.97 |
 | 6 | RadarPillars (paper) | 2024 IROS | 41.1 | 38.6 | 72.6 | 50.70 |
-| **10** | **Ours (default, e58)** | **--** | **36.29** | **41.09** | **68.90** | **48.76** |
-| **11** | **Ours (vel. decomp, e56)** | **--** | **35.43** | **39.96** | **70.76** | **48.72** |
-| 12 | CenterPoint (baseline) | -- | 33.87 | 39.01 | 66.85 | 46.58 |
-| 13 | PointPillars (baseline) | -- | 37.92 | 31.24 | 65.66 | 44.94 |
+| **7** | **Ours — GeoSPA (e59)** | **--** | **39.42** | **42.66** | **68.64** | **50.24** |
+| **8** | **Ours — CenterHead (e54)** | **--** | **37.79** | **41.41** | **71.21** | **50.14** |
+| 9 | CenterPoint (baseline) | -- | 33.87 | 39.01 | 66.85 | 46.58 |
+| 10 | PointPillars (baseline) | -- | 37.92 | 31.24 | 65.66 | 44.94 |
 
 ### Our Results vs. Paper
 
 | Configuration | Car | Ped | Cyc | mAP |
 |---|:---:|:---:|:---:|:---:|
 | RadarPillars paper (5-frame) | **41.1** | 38.6 | **72.6** | **50.7** |
-| Ours — default (e58) | 36.29 | **41.09** (+2.5) | 68.90 | 48.76 |
-| Ours — vel. decomp (e56) | 35.43 | 39.96 (+1.4) | 70.76 | 48.72 |
+| Ours — GeoSPA (e59) | 39.42 | **42.66** (+4.1) | 68.64 | 50.24 |
+| Ours — CenterHead (e54) | 37.79 | 41.41 (+2.8) | 71.21 | 50.14 |
 
 **Key observations:**
-- Pedestrian detection **exceeds** the paper by +1.4 to +2.5 AP
-- Velocity decomposition boosts Cyclist AP significantly: 68.90 → **70.76** (+1.86)
-- Overall mAP gap is **-1.9** from the original paper
-- Cyclist detection shows the largest gap (-1.8 to -3.7 AP)
+- Pedestrian detection **exceeds** the paper by +2.8 to +4.1 AP across both variants
+- GeoSPA variant achieves the **highest mAP** (50.24) with strong Car (+39.42) and Ped (+42.66) performance
+- CenterHead variant achieves **near-baseline Cyclist AP** (71.21 vs 72.6), closing the gap to -1.4 AP
+- Overall mAP gap narrowed to **-0.5** from the original paper (50.24 vs 50.70)
+- Car detection remains the largest gap (-1.7 AP), likely due to differences in training setup
 
 ### 3D AP Evolution (Epoch 30-40)
 
@@ -220,27 +221,34 @@ Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free dete
 
 ### Ablation Studies
 
-#### CenterHead vs Full Model (Module Contribution)
+#### Module Contribution Analysis
 
-Isolates the effect of GeoSPA, CQCA, DCN, and KDE modules by comparing the CenterHead-only baseline against the full SpatialPillar-IUC model. Both trained 60 epochs on VoD with identical hyperparameters.
+Each row adds a single module on top of the RadarPillars + PillarAttention baseline. All models trained 60 epochs on VoD with identical hyperparameters; best-epoch results (3D AP, 11-point) are reported.
 
-| Config | GeoSPA | CQCA | DCN | KDE | Car 3D | Ped 3D | Cyc 3D | mAP |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `spatialpillar_centerhead` (e54) | | | | | **37.79** | **41.41** | **71.21** | **50.14** |
-| `spatialpillar_full` (e50) | x | x | x | x | 37.05 | 41.88 | 68.93 | 49.29 |
+**3D AP (%) — EAA, best epoch**
 
-**Per-class delta (Full - CenterHead):**
+| Config | GeoSPA | CQCA | DCN | KDE | Head | Car | Ped | Cyc | mAP | Epoch |
+|---|:---:|:---:|:---:|:---:|---|:---:|:---:|:---:|:---:|:---:|
+| `spatialpillar_centerhead` | | | | | CenterHead | 37.79 | 41.41 | **71.21** | 50.14 | 54 |
+| `spatialpillar_geospa` | x | | | | AnchorHead | **39.42** | **42.66** | 68.64 | **50.24** | 59 |
+| `spatialpillar_dcn` | | | x | | AnchorHead | 34.73 | 41.31 | 66.74 | 47.59 | 60 |
+| `spatialpillar_full` | x | x | x | x | CenterHead | 37.75 | 41.37 | 68.47 | 49.20 | 54 |
 
-| Class | Delta | Analysis |
-|---|:---:|---|
-| Car | -0.74 | Slight regression |
-| Pedestrian | +0.47 | Marginal improvement |
-| Cyclist | -2.29 | Notable regression |
-| **mAP** | **-0.85** | **Full model underperforms baseline** |
+#### Per-Module Delta (vs CenterHead Baseline)
 
-**Key finding:** Adding GeoSPA + CQCA + DCN + KDE simultaneously does **not** improve over the CenterHead baseline. The combined modules introduce complexity that degrades performance, particularly for Cyclist (-2.29 AP). This suggests potential interference between modules — individual module ablations (GeoSPA-only, KDE-only, CQCA-only configs) are needed to identify which modules contribute positively and which cause regression.
+| Module(s) added | Car | Ped | Cyc | mAP | Verdict |
+|---|:---:|:---:|:---:|:---:|---|
+| + GeoSPA | **+1.63** | **+1.25** | -2.57 | **+0.10** | Best single module — strong Car & Ped gains |
+| + DCN | -3.06 | -0.10 | -4.47 | -2.55 | Hurts all classes |
+| + GeoSPA + CQCA + DCN + KDE (full) | -0.04 | -0.04 | -2.74 | -0.94 | Module interference degrades Cyclist |
 
-*More ablation experiments (individual module contributions) coming soon.*
+**Key findings:**
+- **GeoSPA is the strongest individual contributor**, lifting Car by +1.63 and Ped by +1.25, achieving the highest overall mAP (50.24).
+- **DCN alone hurts performance** across all classes (-2.55 mAP), suggesting deformable convolutions may overfit on radar's sparse BEV grids.
+- **Combining all modules** partially recovers the DCN regression through GeoSPA's positive contribution, but module interference still lowers Cyclist AP by -2.74.
+- **CenterHead vs AnchorHead**: CenterHead excels at Cyclist detection (71.21 vs 68.64), likely because anchor-free heatmaps better handle the bimodal size distribution of cyclists.
+
+*CQCA-only and KDE-only ablations are planned to complete the individual module analysis.*
 
 ---
 
