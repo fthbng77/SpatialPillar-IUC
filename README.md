@@ -113,7 +113,12 @@ graph TD
 |---|:---:|:---:|:---:|:---:|:---:|---|:---:|
 | `vod_radarpillar.yaml` | | x | | | | AnchorHead | |
 | `spatialpillar_centerhead.yaml` | | x | | | | CenterHead | |
+| `spatialpillar_geospa.yaml` | x | x | | | | AnchorHead | |
+| `spatialpillar_cqca.yaml` | | x | x | | | AnchorHead | |
+| `spatialpillar_kde.yaml` | | x | | | x | AnchorHead | |
 | `spatialpillar_dcn.yaml` | | x | | x | | AnchorHead | |
+| `spatialpillar_centerhead_geospa.yaml` | x | x | | | | CenterHead | |
+| `spatialpillar_centerhead_cqca.yaml` | | x | x | | | CenterHead | |
 | `spatialpillar_distill.yaml` | | x | | | | AnchorHead | x |
 | **`spatialpillar_full.yaml`** | **x** | **x** | **x** | **x** | **x** | **CenterHead** | optional |
 
@@ -190,8 +195,8 @@ Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free dete
 | 3 | RadarGaussianDet3D | 2025 | 40.7 | 42.4 | 73.0 | 52.0 |
 | 5 | SMURF | 2023 TIV | **42.31** | 39.09 | 71.50 | 50.97 |
 | 6 | RadarPillars (paper) | 2024 IROS | 41.1 | 38.6 | 72.6 | 50.70 |
-| **7** | **Ours — GeoSPA (e59)** | **--** | **39.42** | **42.66** | **68.64** | **50.24** |
-| **8** | **Ours — CenterHead (e54)** | **--** | **37.79** | **41.41** | **71.21** | **50.14** |
+| **7** | **Ours — CenterHead+GeoSPA (e54)** | **--** | **37.65** | **42.42** | **71.13** | **50.40** |
+| **8** | **Ours — GeoSPA (e59)** | **--** | **39.42** | **42.66** | **68.64** | **50.24** |
 | 9 | CenterPoint (baseline) | -- | 33.87 | 39.01 | 66.85 | 46.58 |
 | 10 | PointPillars (baseline) | -- | 37.92 | 31.24 | 65.66 | 44.94 |
 
@@ -200,22 +205,15 @@ Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free dete
 | Configuration | Car | Ped | Cyc | mAP |
 |---|:---:|:---:|:---:|:---:|
 | RadarPillars paper (5-frame) | **41.1** | 38.6 | **72.6** | **50.7** |
+| Ours — CenterHead+GeoSPA (e54) | 37.65 | **42.42** (+3.8) | 71.13 | **50.40** |
 | Ours — GeoSPA (e59) | 39.42 | **42.66** (+4.1) | 68.64 | 50.24 |
-| Ours — CenterHead (e54) | 37.79 | 41.41 (+2.8) | 71.21 | 50.14 |
 
 **Key observations:**
-- Pedestrian detection **exceeds** the paper by +2.8 to +4.1 AP across both variants
-- GeoSPA variant achieves the **highest mAP** (50.24) with strong Car (+39.42) and Ped (+42.66) performance
-- CenterHead variant achieves **near-baseline Cyclist AP** (71.21 vs 72.6), closing the gap to -1.4 AP
-- Overall mAP gap narrowed to **-0.5** from the original paper (50.24 vs 50.70)
-- Car detection remains the largest gap (-1.7 AP), likely due to differences in training setup
-
-### 3D AP Evolution (Epoch 30-40)
-
-<p align="center">
-  <img src="docs/visualizations/3d_ap_evolution_2peakcyclist.png" width="60%" alt="3D AP Evolution">
-  <br><em>Training is highly stable: Cyclist AP stays in 19.5-20.4 range with minimal oscillation</em>
-</p>
+- **CenterHead+GeoSPA achieves the highest mAP** (50.40) by combining GeoSPA's geometric features with CenterHead's anchor-free detection
+- Pedestrian detection **exceeds** the paper by +3.8 to +4.1 AP across both variants
+- CenterHead+GeoSPA achieves **near-baseline Cyclist AP** (71.13 vs 72.6), closing the gap to -1.5 AP
+- Overall mAP gap narrowed to **-0.3** from the original paper (50.40 vs 50.70)
+- Car detection remains the largest gap (-3.5 AP), likely due to CenterHead's lack of anchor priors for uniform-sized objects
 
 ---
 
@@ -229,8 +227,9 @@ Each row adds a single module on top of the RadarPillars + PillarAttention basel
 
 | Config | GeoSPA | CQCA | DCN | KDE | Head | Car | Ped | Cyc | mAP | Epoch |
 |---|:---:|:---:|:---:|:---:|---|:---:|:---:|:---:|:---:|:---:|
-| `spatialpillar_centerhead` | | | | | CenterHead | 37.79 | 41.41 | **71.21** | 50.14 | 54 |
-| `spatialpillar_geospa` | x | | | | AnchorHead | **39.42** | **42.66** | 68.64 | **50.24** | 59 |
+| `spatialpillar_centerhead` | | | | | CenterHead | 37.79 | 41.41 | 71.21 | 50.14 | 54 |
+| `spatialpillar_geospa` | x | | | | AnchorHead | **39.42** | **42.66** | 68.64 | 50.24 | 59 |
+| `spatialpillar_centerhead_geospa` | x | | | | CenterHead | 37.65 | 42.42 | 71.13 | **50.40** | 54 |
 | `spatialpillar_dcn` | | | x | | AnchorHead | 34.73 | 41.31 | 66.74 | 47.59 | 60 |
 | `spatialpillar_full` | x | x | x | x | CenterHead | 37.75 | 41.37 | 68.47 | 49.20 | 54 |
 
@@ -238,15 +237,17 @@ Each row adds a single module on top of the RadarPillars + PillarAttention basel
 
 | Module(s) added | Car | Ped | Cyc | mAP | Verdict |
 |---|:---:|:---:|:---:|:---:|---|
-| + GeoSPA | **+1.63** | **+1.25** | -2.57 | **+0.10** | Best single module — strong Car & Ped gains |
+| + GeoSPA (AnchorHead) | **+1.63** | **+1.25** | -2.57 | +0.10 | Strong Car & Ped gains, Cyclist regresses due to AnchorHead |
+| + GeoSPA (CenterHead) | -0.14 | +1.01 | -0.08 | **+0.26** | **Best combo — GeoSPA gains + Cyclist preserved** |
 | + DCN | -3.06 | -0.10 | -4.47 | -2.55 | Hurts all classes |
 | + GeoSPA + CQCA + DCN + KDE (full) | -0.04 | -0.04 | -2.74 | -0.94 | Module interference degrades Cyclist |
 
 **Key findings:**
-- **GeoSPA is the strongest individual contributor**, lifting Car by +1.63 and Ped by +1.25, achieving the highest overall mAP (50.24).
-- **DCN alone hurts performance** across all classes (-2.55 mAP), suggesting deformable convolutions may overfit on radar's sparse BEV grids.
-- **Combining all modules** partially recovers the DCN regression through GeoSPA's positive contribution, but module interference still lowers Cyclist AP by -2.74.
-- **CenterHead vs AnchorHead**: CenterHead excels at Cyclist detection (71.21 vs 68.64), likely because anchor-free heatmaps better handle the bimodal size distribution of cyclists.
+- **CenterHead + GeoSPA is the best configuration** (mAP 50.40), combining GeoSPA's Pedestrian boost (+1.01) with CenterHead's Cyclist strength (71.13).
+- **GeoSPA is the strongest individual module**, lifting Ped by +1.0 to +1.25 AP regardless of head type.
+- **CenterHead vs AnchorHead**: CenterHead excels at Cyclist detection (71.21 vs 68.64) because anchor-free heatmaps better handle the bimodal size distribution of cyclists, while AnchorHead's single anchor (1.94m) misses shorter parked bicycles.
+- **DCN alone hurts performance** across all classes (-2.55 mAP), suggesting deformable convolutions overfit on radar's sparse BEV grids.
+- **Combining all modules** causes interference — DCN's regression dominates despite GeoSPA's positive contribution.
 
 *CQCA-only and KDE-only ablations are planned to complete the individual module analysis.*
 
