@@ -65,13 +65,14 @@ def compute_cluster_features(pillar_features, cluster_labels, num_clusters):
     C = pillar_features.shape[1]
     device = pillar_features.device
 
-    cluster_features = torch.zeros(num_clusters, C, device=device)
+    # Vectorized scatter-based aggregation (no for loop)
     cluster_counts = torch.zeros(num_clusters, device=device)
+    cluster_counts.scatter_add_(0, cluster_labels, torch.ones(cluster_labels.shape[0], device=device))
 
-    for c in range(num_clusters):
-        mask = cluster_labels == c
-        if mask.any():
-            cluster_features[c] = pillar_features[mask].mean(dim=0)
-            cluster_counts[c] = mask.sum().float()
+    cluster_sum = torch.zeros(num_clusters, C, device=device)
+    cluster_sum.scatter_add_(0, cluster_labels.unsqueeze(1).expand(-1, C), pillar_features)
+
+    safe_counts = cluster_counts.clamp(min=1).unsqueeze(1)
+    cluster_features = cluster_sum / safe_counts
 
     return cluster_features, cluster_counts

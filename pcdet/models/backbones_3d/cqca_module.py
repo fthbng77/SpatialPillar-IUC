@@ -108,21 +108,23 @@ class CQCAModule(nn.Module):
                 updated_features.append(cur_features)
                 continue
 
-            # Extract velocity for clustering
+            # Extract velocity for clustering (vectorized)
             if voxels is not None and voxel_num_points is not None:
                 cur_voxels = voxels[batch_mask]           # (N_b, max_pts, F)
                 cur_num_pts = voxel_num_points[batch_mask]  # (N_b,)
 
-                # Mean velocity per pillar
-                velocities = []
-                for i in range(num_pillars):
-                    n_pts = int(cur_num_pts[i].item())
-                    if n_pts > 0 and cur_voxels.shape[2] > self.velocity_index:
-                        vel = cur_voxels[i, :n_pts, self.velocity_index].mean().item()
-                    else:
-                        vel = 0.0
-                    velocities.append(vel)
-                velocities = np.array(velocities, dtype=np.float32)
+                if cur_voxels.shape[2] > self.velocity_index:
+                    # Create mask for valid points per pillar
+                    max_pts = cur_voxels.shape[1]
+                    pt_range = torch.arange(max_pts, device=device).unsqueeze(0)  # (1, max_pts)
+                    valid_mask = pt_range < cur_num_pts.unsqueeze(1)               # (N_b, max_pts)
+
+                    vel_values = cur_voxels[:, :, self.velocity_index]             # (N_b, max_pts)
+                    vel_values = vel_values * valid_mask.float()
+                    safe_counts = cur_num_pts.clamp(min=1).float()
+                    velocities = (vel_values.sum(dim=1) / safe_counts).cpu().numpy()
+                else:
+                    velocities = np.zeros(num_pillars, dtype=np.float32)
             else:
                 # Fallback: no velocity info, use single cluster
                 velocities = np.zeros(num_pillars, dtype=np.float32)
@@ -143,9 +145,9 @@ class CQCAModule(nn.Module):
 
             cluster_labels_t = torch.from_numpy(cluster_labels).long().to(device)
 
-            # Compute cluster query features
+            # Compute cluster query features (gradient flows through)
             cluster_features, cluster_counts = compute_cluster_features(
-                cur_features.detach(), cluster_labels_t, num_clusters
+                cur_features, cluster_labels_t, num_clusters
             )  # (num_clusters, C)
 
             # Cross-attention: pillars attend to clusters

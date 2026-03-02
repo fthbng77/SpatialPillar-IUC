@@ -15,6 +15,9 @@ from pcdet.config import cfg, cfg_from_list, cfg_from_yaml_file, log_config_to_f
 from pcdet.datasets import build_dataloader
 from pcdet.models import build_network, model_fn_decorator
 from pcdet.utils import common_utils
+import os
+os.environ['WANDB_SILENT'] = 'true'
+os.environ['WANDB_CONSOLE'] = 'off'
 try:
     import wandb
 except ImportError:
