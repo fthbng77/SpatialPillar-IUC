@@ -221,24 +221,28 @@ Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free dete
 
 #### Module Contribution Analysis
 
-Each row adds a single module on top of the RadarPillars + PillarAttention baseline. All models trained 60 epochs on VoD with identical hyperparameters; best-epoch results (3D AP, 11-point) are reported.
+Each row adds a single module on top of the RadarPillars + PillarAttention baseline. All models trained 60 epochs on VoD with identical hyperparameters; converged-epoch results (3D AP, 11-point) are reported.
 
-**3D AP (%) — EAA, best epoch**
+**3D AP (%) — EAA, converged epoch**
 
 | Config | GeoSPA | CQCA | DCN | KDE | Head | Car | Ped | Cyc | mAP | Epoch |
 |---|:---:|:---:|:---:|:---:|---|:---:|:---:|:---:|:---:|:---:|
 | `spatialpillar_centerhead` | | | | | CenterHead | 37.79 | 41.41 | 71.21 | 50.14 | 54 |
 | `spatialpillar_geospa` | x | | | | AnchorHead | **39.42** | **42.66** | 68.64 | 50.24 | 59 |
-| `spatialpillar_centerhead_geospa` | x | | | | CenterHead | 37.65 | 42.42 | 71.13 | **50.40** | 54 |
+| `spatialpillar_centerhead_geospa` | x | | | | CenterHead | 37.65 | **42.42** | **71.13** | **50.40** | 54 |
+| `spatialpillar_centerhead_cqca` | | x | | | CenterHead | 37.25 | 41.36 | 68.22 | 48.94 | 57 |
 | `spatialpillar_dcn` | | | x | | AnchorHead | 34.73 | 41.31 | 66.74 | 47.59 | 60 |
 | `spatialpillar_full` | x | x | x | x | CenterHead | 37.75 | 41.37 | 68.47 | 49.20 | 54 |
+
+> **Note on CQCA training stability:** CQCA exhibits high per-epoch variance during OneCycleLR's peak-to-decay transition (epochs 20-40). The auto-saved "best" checkpoint (epoch 35) falls in this volatile zone and inflates Cyclist AP to 73.66 while Car drops to 31.91. We report the converged epoch 57 result instead, where metrics stabilize (Car std < 1 AP across epochs 55-60).
 
 #### Per-Module Delta (vs CenterHead Baseline)
 
 | Module(s) added | Car | Ped | Cyc | mAP | Verdict |
 |---|:---:|:---:|:---:|:---:|---|
 | + GeoSPA (AnchorHead) | **+1.63** | **+1.25** | -2.57 | +0.10 | Strong Car & Ped gains, Cyclist regresses due to AnchorHead |
-| + GeoSPA (CenterHead) | -0.14 | +1.01 | -0.08 | **+0.26** | **Best combo — GeoSPA gains + Cyclist preserved** |
+| + GeoSPA (CenterHead) | -0.14 | **+1.01** | -0.08 | **+0.26** | **Best combo — GeoSPA gains + Cyclist preserved** |
+| + CQCA (CenterHead) | -0.54 | -0.05 | -2.99 | -1.20 | Cyclist drops; training instability (see note above) |
 | + DCN | -3.06 | -0.10 | -4.47 | -2.55 | Hurts all classes |
 | + GeoSPA + CQCA + DCN + KDE (full) | -0.04 | -0.04 | -2.74 | -0.94 | Module interference degrades Cyclist |
 
@@ -246,10 +250,11 @@ Each row adds a single module on top of the RadarPillars + PillarAttention basel
 - **CenterHead + GeoSPA is the best configuration** (mAP 50.40), combining GeoSPA's Pedestrian boost (+1.01) with CenterHead's Cyclist strength (71.13).
 - **GeoSPA is the strongest individual module**, lifting Ped by +1.0 to +1.25 AP regardless of head type.
 - **CenterHead vs AnchorHead**: CenterHead excels at Cyclist detection (71.21 vs 68.64) because anchor-free heatmaps better handle the bimodal size distribution of cyclists, while AnchorHead's single anchor (1.94m) misses shorter parked bicycles.
+- **CQCA alone hurts performance** (-1.20 mAP), primarily through Cyclist regression (-2.99 AP). The velocity-based cross-attention shows high training variance under OneCycleLR (epoch-to-epoch Cyclist fluctuations of ~10 AP during the LR peak zone), suggesting CQCA's clustering-attention mechanism is sensitive to learning rate dynamics and may require a lower peak LR or cosine annealing schedule.
 - **DCN alone hurts performance** across all classes (-2.55 mAP), suggesting deformable convolutions overfit on radar's sparse BEV grids.
-- **Combining all modules** causes interference — DCN's regression dominates despite GeoSPA's positive contribution.
+- **Combining all modules** causes interference — DCN's and CQCA's individual regressions compound despite GeoSPA's positive contribution.
 
-*CQCA-only and KDE-only ablations are planned to complete the individual module analysis.*
+*KDE-only ablation is planned to complete the individual module analysis.*
 
 ---
 
@@ -497,6 +502,7 @@ python tools/generate_velocity_norm_plots.py
 
 | Date | Description |
 |---|---|
+| 2026-03 | CenterHead+CQCA ablation: converged-epoch evaluation, training stability analysis |
 | 2026-02 | SpatialPillar-IUC: GeoSPA + PillarAttention + CQCA + DCN + KDE + CenterHead |
 | 2026-02 | CQCAModule: DBSCAN velocity clustering + cross-attention |
 | 2026-02 | DCNBEVBackbone: deformable convolutions for BEV feature extraction |
