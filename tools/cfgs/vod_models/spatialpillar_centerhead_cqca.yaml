@@ -58,11 +58,14 @@ MODEL:
     BACKBONE_3D_POST:
         NAME: CQCAModule
         ATTN_CHANNELS: 32
-        NUM_HEADS: 2
+        NUM_HEADS: 4
         DROPOUT: 0.0
-        VELOCITY_EPS: 0.5
+        DBSCAN_EPS: 0.4
+        DBSCAN_MIN_SAMPLES: 5
         VELOCITY_INDEX: 5
         MAX_CLUSTERS: 32
+        SPATIAL_WEIGHT: 1.0
+        VELOCITY_WEIGHT: 2.0
 
     MAP_TO_BEV:
         NAME: PointPillarScatter
