@@ -13,3 +13,5 @@ pcdet.egg-info/
 .venv/
 data/VoD/
 wandb/
+paper
+paper_radarpillars

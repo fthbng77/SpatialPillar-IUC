@@ -186,34 +186,45 @@ Replaces `AnchorHeadSingle` with heatmap-based `CenterHead` for anchor-free dete
 
 ### SOTA Comparison on VoD
 
-**Entire Annotated Area (EAA)** — 3D AP (%) at IoU: Car=0.50, Ped/Cyc=0.25
+**Entire Annotated Area (EAA)** — 3D AP (%) at IoU: Car=0.50, Ped/Cyc=0.25 (R11).
 
 | Rank | Method | Year | Car | Ped | Cyc | mAP |
 |:---:|---|---|:---:|:---:|:---:|:---:|
 | 1 | MAFF-Net | 2025 RA-L | 42.3 | **46.8** | **74.7** | **54.6** |
 | 2 | SCKD | 2025 AAAI | 41.89 | 43.51 | 70.83 | 52.08 |
 | 3 | RadarGaussianDet3D | 2025 | 40.7 | 42.4 | 73.0 | 52.0 |
-| 5 | SMURF | 2023 TIV | **42.31** | 39.09 | 71.50 | 50.97 |
-| 6 | RadarPillars (paper) | 2024 IROS | 41.1 | 38.6 | 72.6 | 50.70 |
-| **7** | **Ours — CenterHead+GeoSPA (e54)** | **--** | **37.65** | **42.42** | **71.13** | **50.40** |
-| **8** | **Ours — GeoSPA (e59)** | **--** | **39.42** | **42.66** | **68.64** | **50.24** |
-| 9 | CenterPoint (baseline) | -- | 33.87 | 39.01 | 66.85 | 46.58 |
-| 10 | PointPillars (baseline) | -- | 37.92 | 31.24 | 65.66 | 44.94 |
+| **4** | **Ours — paper_faithful_rot, best seed (s3)** | **--** | **41.58** | **44.78** | 71.31 | **52.56** |
+| **5** | **Ours — paper_faithful_rot, 3-seed mean** | **--** | 41.02 | 43.15 | 70.12 | **51.43 ± 0.99** |
+| 6 | SMURF | 2023 TIV | **42.31** | 39.09 | 71.50 | 50.97 |
+| 7 | RadarPillars (paper) | 2024 IROS | 41.1 | 38.6 | 72.6 | 50.70 |
+| 8 | CenterPoint (baseline) | -- | 33.87 | 39.01 | 66.85 | 46.58 |
+| 9 | PointPillars (baseline) | -- | 37.92 | 31.24 | 65.66 | 44.94 |
 
-### Our Results vs. Paper
+### Paper-Faithful Baseline (RadarPillars Reproduction)
 
-| Configuration | Car | Ped | Cyc | mAP |
-|---|:---:|:---:|:---:|:---:|
-| RadarPillars paper (5-frame) | **41.1** | 38.6 | **72.6** | **50.7** |
-| Ours — CenterHead+GeoSPA (e54) | 37.65 | **42.42** (+3.8) | 71.13 | **50.40** |
-| Ours — GeoSPA (e59) | 39.42 | **42.66** (+4.1) | 68.64 | 50.24 |
+This baseline reproduces and exceeds the RadarPillars paper using a strict
+Section IV-faithful pipeline + the augmentor velocity-vector fix from this
+repo + rotation augmentation. It is the foundation we use for all
+SpatialPillar ablations below.
+
+| Configuration | Car | Ped | Cyc | mAP R11 | Δ vs paper |
+|---|:---:|:---:|:---:|:---:|:---:|
+| RadarPillars paper (5-frame) | 41.10 | 38.60 | **72.60** | 50.70 | -- |
+| **Ours — best seed (s3, ep70)** | **41.58** | **44.78** | 71.31 | **52.56** | **+1.86** |
+| Ours — 3-seed mean | 41.02 | 43.15 | 70.12 | 51.43 ± 0.99 | +0.73 |
+| Ours — s2 (ep66) | 41.15 | 43.25 | 70.33 | 51.58 | +0.88 |
+| Ours — s1 (ep65) | 40.34 | 41.42 | 68.73 | 50.16 | -0.54 |
+
+Config: `tools/cfgs/vod_models/vod_radarpillar_rot.yaml`.
+Best ckpt path: `output/cfgs/vod_models/vod_radarpillar_rot/paper_faithful_rot_s3/ckpt/checkpoint_best.pth`.
 
 **Key observations:**
-- **CenterHead+GeoSPA achieves the highest mAP** (50.40) by combining GeoSPA's geometric features with CenterHead's anchor-free detection
-- Pedestrian detection **exceeds** the paper by +3.8 to +4.1 AP across both variants
-- CenterHead+GeoSPA achieves **near-baseline Cyclist AP** (71.13 vs 72.6), closing the gap to -1.5 AP
-- Overall mAP gap narrowed to **-0.3** from the original paper (50.40 vs 50.70)
-- Car detection remains the largest gap (-3.5 AP), likely due to CenterHead's lack of anchor priors for uniform-sized objects
+- **Paper claim reproduced and exceeded** with the rotation-augmented config: best-seed mAP 52.56 (+1.86), 3-seed mean 51.43 (+0.73).
+- **Rotation augmentation contributes ~+2 mAP** alone (v1 47.50 → v2 49.77, same seed).
+- **Seed variance is real**: 3 identical runs spanned 50.16–52.56 (range 2.40, std 0.99).
+- Pedestrian is reliably +2.8 to +6.2 over paper across all seeds, likely driven by the velocity-aware augmentor fix.
+- The remaining gap to MAFF-Net (54.6) is mostly on Cyclist (-3.3 even at our best seed).
+- The SpatialPillar ablations below were originally measured against an older, weaker baseline (48–50 mAP). They should be re-run on top of this 52.56 baseline for paper-grade per-module deltas.
 
 ---
 
